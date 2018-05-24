@@ -24,8 +24,10 @@ genre_list <- c("Action", "Adventure", "Animation", "Children",
 
 # Creates a matrix for the number of movies + 1 and the number of genres
 genre_matrix <- matrix(0, 9126, 18)
+
 # Set first row to genre list
 genre_matrix[1,] <- genre_list
+
 # Set column names to genre list
 colnames(genre_matrix) <- genre_list
 
@@ -40,50 +42,84 @@ for (i in 1:nrow(genres)) {
 # Convert the matrix into a data frame
 # Remove first row, which was the genre list
 genre_matrix <- as.data.frame(genre_matrix[-1,], stringsAsFactors = FALSE) 
+
 # Convert from characters to integers
 for (c in 1:ncol(genre_matrix)) {
   genre_matrix[,c] <- as.integer(genre_matrix[,c])  
 } 
 
 # Create search matrix
-
+search_matrix <- cbind(movies[,1:2], genre_matrix)
 
 # Create ratings matrix. Rows = userId, Columns = movieId
+ratings_matrix <- dcast(ratings, userId~movieId, 
+                        value.var = "rating", na.rm = FALSE)
 
 # Remove userId's
+ratings_matrix <- as.matrix(ratings_matrix[,-1])
 
 # Convert rating matrix into a recommenderlab sparse matrix
-
+ratings_matrix <- as(ratings_matrix, "realRatingMatrix")
 
 # Selecting relevant data
+
 # Select minimum number of users per rated movie
 # and the minimum views per user
+ratings_movies <- ratings_matrix[rowCounts(ratings_matrix) > 50,
+                                 colCounts(ratings_matrix) > 50]
 
+ratings_movies
 
 # Normalize the data
+normalized_ratings_movies <- normalize(ratings_movies)
+
 # Remove bias instances of data 
 # Averages the rating for each user to 0
-
-
+sum(rowMeans(normalized_ratings_movies) > 0.00001)
 
 # Define training and set data
+training <- sample(x = c(TRUE, FALSE),
+                   size = nrow(ratings_movies),
+                   replace = TRUE,
+                   prob = c(0.8, 0.2))
 
-
-
+training_data <- ratings_movies[training,]
+test_data <- ratings_movies[!training]
 
 # Building the recommendation model
+recommender_models <- recommenderRegistry$get_entries(dataType = "realRatingMatrix")
+recommender_models$IBCF_realRatingMatrix$parameters
 
+recc_model <- Recommender(data = training_data,
+                          method = "IBCF",
+                          parameter = list(k = 30))
 
+recc_model
 
 # Applying the recommender system on the original dataset
 
 # No. of recommendations we want per user 
+recommendations <- 10
 
+prediction <- predict(object = recc_model,
+                      newdata = test_data,
+                      n = recommendations)
 
+prediction
 
 # Recommendations for the first user
-
+user_1_recommendations <- prediction@items[[1]]
+movies_user_1 <- prediction@itemLabels[user_1_recommendations]
+movies_user_2 <- movies_user_1
+for (i in 1:10){
+  movies_user_2[i] <- as.character(subset(movies,
+                                          movies$movieId == movies_user_1[i])$title)
+}
 
 # A matrix of recommendations for each user
+recc_matrix <- sapply(prediction@items,
+                      function(x){
+                        as.integer(colnames(ratings_movies)[x])
+                      })
 
-
+recc_matrix[,1:4]
